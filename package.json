@@ -1,24 +1,22 @@
 {
-  "version": "0.1.2",
+  "version": "0.1.4",
   "name": "weerun",
+  "bin": "./dst/main.js",
   "type": "module",
-  "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    "./": "./src/index.ts"
   },
   "scripts": {
     "build": "bun scripts/build.ts"
   },
   "devDependencies": {
-    "@types/bun": "^1.2.16"
-  },
-  "peerDependencies": {
-    "typescript": "^5.8.3"
-  },
-  "dependencies": {
+    "@types/bun": "^1.2.16",
     "@effect/cli": "^0.63.11",
     "effect": "^3.16.7",
     "@effect/platform": "^0.82.8",
     "@effect/platform-bun": "^0.65.5"
+  },
+  "peerDependencies": {
+    "typescript": "^5.8.3"
   }
 }
