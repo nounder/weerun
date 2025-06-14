@@ -1,0 +1,47 @@
+rerun -- Run command on files change
+
+USAGE
+
+$ rerun [(-p, --path)...] [(-d, --delay)] [(-v, --verbose)] <command> <arg>...
+
+ARGUMENTS
+
+<command>
+
+A user-defined piece of text.
+
+Command to execute when files change
+
+<arg>...
+
+A user-defined piece of text.
+
+This argument may be repeated zero or more times.
+
+OPTIONS
+
+(-p, --path text)...
+
+A user-defined piece of text.
+
+Paths to watch. Defaults to current directory.
+
+This option may be repeated zero or more times.
+
+This setting is optional.
+
+(-d, --delay float)
+
+A floating point number.
+
+Delay in seconds before rerunning the command.
+
+This setting is optional.
+
+(-v, --verbose)
+
+A true or false value.
+
+Print resolved paths that are being watched.
+
+This setting is optional.

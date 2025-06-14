@@ -1,6 +1,7 @@
 import * as Cli from "@effect/cli"
 import { Console, Duration, Effect } from "effect"
 import * as NPath from "node:path"
+import PackageJson from "../package.json" assert { type: "json" }
 import * as Runner from "./Runner.ts"
 
 const pathOpt = Cli.Options.text("path").pipe(
@@ -60,6 +61,6 @@ const mainCommand = Cli.Command.make(
 
 export const run = Cli.Command.run(mainCommand, {
   name: "rerun",
-  version: "0.1.0",
+  version: PackageJson.version,
   summary: Cli.Span.text("Run command on files change"),
 })
