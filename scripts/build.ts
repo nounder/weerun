@@ -115,12 +115,12 @@ async function main() {
   // Determine tag name before building
   const tagName = await createGitTag(packageJson.version)
 
-  console.log("Build")
   const result = await Bun.build({
     entrypoints: [mainFile],
     outdir: "./dst",
     target: "node",
     naming: "main.js",
+    banner: `#!/usr/bin/env node`,
   })
 
   if (result.success) {
