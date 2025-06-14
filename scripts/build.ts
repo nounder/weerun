@@ -15,10 +15,43 @@ function generateSuffix(index: number): string {
   return result
 }
 
+async function checkForUncommittedChanges(): Promise<boolean> {
+  console.log("Checking for uncommitted changes...")
+
+  const status = await git.statusMatrix({ fs, dir: "." })
+  const changedFiles = status.filter(([, head, workdir, stage]) => {
+    // File has changes if:
+    // - workdir !== head (working directory differs from HEAD)
+    // - stage !== head (staged changes differ from HEAD)
+    return workdir !== head || stage !== head
+  })
+
+  if (changedFiles.length > 0) {
+    console.error("✗ Found uncommitted changes:")
+    for (const [filepath, head, workdir, stage] of changedFiles) {
+      let statusText = ""
+      if (workdir !== head && stage === head) {
+        statusText = "modified (not staged)"
+      } else if (stage !== head && workdir === stage) {
+        statusText = "staged"
+      } else if (workdir !== head && stage !== head) {
+        statusText = "modified (staged and unstaged)"
+      } else if (head === 0) {
+        statusText = "untracked"
+      }
+      console.error(`  ${filepath} - ${statusText}`)
+    }
+    return true
+  }
+
+  console.log("✓ No uncommitted changes found")
+  return false
+}
+
 async function createGitTag(version: string) {
   console.log("Create git tag")
 
-  const baseTag = `v${version}-dst`
+  const baseTag = `v${version}`
   let tagName = baseTag
   let suffixIndex = 0
 
@@ -28,7 +61,7 @@ async function createGitTag(version: string) {
       await git.resolveRef({ fs, dir: ".", ref: `refs/tags/${tagName}` })
       // Tag exists, try next suffix
       const suffix = generateSuffix(suffixIndex)
-      tagName = `v${version}${suffix}-dst`
+      tagName = `v${version}${suffix}`
       suffixIndex++
     } catch (error) {
       // Tag doesn't exist, we can use this one
@@ -36,20 +69,52 @@ async function createGitTag(version: string) {
     }
   }
 
-  // Create the tag
+  return tagName
+}
+
+async function commitAndTag(tagName: string) {
+  console.log("Adding updated files to git...")
+
+  // Add package.json and dst/ directory
+  await git.add({ fs, dir: ".", filepath: "package.json" })
+  await git.add({ fs, dir: ".", filepath: "dst" })
+
+  console.log("✓ Added updated files")
+
+  console.log("Creating commit...")
+  const commitSha = await git.commit({
+    fs,
+    dir: ".",
+    message: tagName,
+    author: {
+      name: "Build Script",
+      email: "build@weerun.dev",
+    },
+  })
+
+  console.log(`✓ Created commit: ${commitSha}`)
+
+  // Create the tag on the new commit
   await git.tag({
     fs,
     dir: ".",
     ref: tagName,
-    object: await git.resolveRef({ fs, dir: ".", ref: "HEAD" }),
+    object: commitSha,
   })
 
   console.log(`✓ Created git tag: ${tagName}`)
-
-  return tagName
 }
 
 async function main() {
+  // Check for uncommitted changes before starting
+  const hasChanges = await checkForUncommittedChanges()
+  if (hasChanges) {
+    console.error(
+      "✗ Aborting build due to uncommitted changes. Please commit or stash your changes first.",
+    )
+    process.exit(1)
+  }
+
   console.log("Create dst/ directory")
   await mkdir("dst", { recursive: true })
 
@@ -57,6 +122,9 @@ async function main() {
   const packageJsonContent = await readFile("package.json", "utf-8")
   const packageJson = JSON.parse(packageJsonContent)
   const mainFile = packageJson.main || "./src/index.ts"
+
+  // Determine tag name before building
+  const tagName = await createGitTag(packageJson.version)
 
   console.log("Build")
   const result = await Bun.build({
@@ -97,8 +165,8 @@ async function main() {
     "✓ Updated package.json - moved dependencies to devDependencies and added bin property",
   )
 
-  // Create git tag
-  await createGitTag(packageJson.version)
+  // Commit updated files and create tag
+  await commitAndTag(tagName)
 
   console.log("\n🎉 Build completed successfully!")
 }
