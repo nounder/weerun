@@ -1,6 +1,5 @@
 import fs from "fs"
 import { mkdir, readFile, writeFile } from "fs/promises"
-import git from "isomorphic-git"
 
 // Generate suffix sequence: a, b, c, ..., z, aa, ab, ac, ...
 function generateSuffix(index: number): string {
@@ -18,34 +17,38 @@ function generateSuffix(index: number): string {
 async function checkForUncommittedChanges(): Promise<boolean> {
   console.log("Checking for uncommitted changes...")
 
-  const status = await git.statusMatrix({ fs, dir: "." })
-  const changedFiles = status.filter(([, head, workdir, stage]) => {
-    // File has changes if:
-    // - workdir !== head (working directory differs from HEAD)
-    // - stage !== head (staged changes differ from HEAD)
-    return workdir !== head || stage !== head
-  })
+  try {
+    const result = await Bun.$`git status --porcelain`.text()
+    const changedFiles = result.trim().split("\n").filter(line =>
+      line.trim() !== ""
+    )
 
-  if (changedFiles.length > 0) {
-    console.error("✗ Found uncommitted changes:")
-    for (const [filepath, head, workdir, stage] of changedFiles) {
-      let statusText = ""
-      if (workdir !== head && stage === head) {
-        statusText = "modified (not staged)"
-      } else if (stage !== head && workdir === stage) {
-        statusText = "staged"
-      } else if (workdir !== head && stage !== head) {
-        statusText = "modified (staged and unstaged)"
-      } else if (head === 0) {
-        statusText = "untracked"
+    if (changedFiles.length > 0) {
+      console.error("✗ Found uncommitted changes:")
+      for (const line of changedFiles) {
+        const status = line.substring(0, 2)
+        const filepath = line.substring(3)
+        let statusText = ""
+
+        if (status === " M") statusText = "modified (not staged)"
+        else if (status === "M ") statusText = "staged"
+        else if (status === "MM") statusText = "modified (staged and unstaged)"
+        else if (status === "??") statusText = "untracked"
+        else if (status === "A ") statusText = "added"
+        else if (status === "D ") statusText = "deleted"
+        else statusText = status.trim()
+
+        console.error(`  ${filepath} - ${statusText}`)
       }
-      console.error(`  ${filepath} - ${statusText}`)
+      return true
     }
+
+    console.log("✓ No uncommitted changes found")
+    return false
+  } catch (error) {
+    console.error("Error checking git status:", error)
     return true
   }
-
-  console.log("✓ No uncommitted changes found")
-  return false
 }
 
 async function createGitTag(version: string) {
@@ -58,7 +61,7 @@ async function createGitTag(version: string) {
   // Check if tag already exists and find next available suffix
   while (true) {
     try {
-      await git.resolveRef({ fs, dir: ".", ref: `refs/tags/${tagName}` })
+      await Bun.$`git rev-parse --verify refs/tags/${tagName}`.quiet()
       // Tag exists, try next suffix
       const suffix = generateSuffix(suffixIndex)
       tagName = `v${version}${suffix}`
@@ -76,31 +79,17 @@ async function commitAndTag(tagName: string) {
   console.log("Adding updated files to git...")
 
   // Add package.json and dst/ directory
-  await git.add({ fs, dir: ".", filepath: "package.json" })
-  await git.add({ fs, dir: ".", filepath: "dst" })
+  await Bun.$`git add package.json dst/`
 
   console.log("✓ Added updated files")
 
   console.log("Creating commit...")
-  const commitSha = await git.commit({
-    fs,
-    dir: ".",
-    message: tagName,
-    author: {
-      name: "Build Script",
-      email: "build@weerun.dev",
-    },
-  })
+  await Bun.$`git commit -m ${tagName}`
 
-  console.log(`✓ Created commit: ${commitSha}`)
+  console.log(`✓ Created commit with message: ${tagName}`)
 
   // Create the tag on the new commit
-  await git.tag({
-    fs,
-    dir: ".",
-    ref: tagName,
-    object: commitSha,
-  })
+  await Bun.$`git tag ${tagName}`
 
   console.log(`✓ Created git tag: ${tagName}`)
 }
