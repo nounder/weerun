@@ -92,6 +92,12 @@ async function commitAndTag(tagName: string) {
   await Bun.$`git tag ${tagName}`
 
   console.log(`✓ Created git tag: ${tagName}`)
+
+  // Reset the main branch to before the build commit, but keep the tag
+  console.log("Resetting main branch to exclude build commit...")
+  await Bun.$`git reset --hard HEAD~1`
+
+  console.log("✓ Reset main branch - build commit preserved in tag only")
 }
 
 async function main() {
